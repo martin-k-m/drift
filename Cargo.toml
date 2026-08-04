@@ -1,0 +1,28 @@
+[package]
+name = "drift-diff"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+description = "Diff two tabular datasets: schema changes, added and removed rows, and which fields moved. Zero dependencies."
+license = "MIT"
+repository = "https://github.com/martin-k-m/drift"
+homepage = "https://github.com/martin-k-m/drift"
+readme = "README.md"
+keywords = ["csv", "diff", "data", "cli", "comparison"]
+categories = ["command-line-utilities", "parsing"]
+
+# `drift` is taken on crates.io, so the crate is drift-diff. The binary, the
+# repository and everything a user types stay `drift`.
+[[bin]]
+name = "drift"
+path = "src/main.rs"
+
+[dependencies]
+# Deliberately empty. A tool that reads two files and compares them should not
+# pull a tree you then have to audit, and the CSV parser it needs is a hundred
+# lines. Same reasoning as joist.
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true

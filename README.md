@@ -1,0 +1,83 @@
+# drift
+
+Diff two tabular datasets. Schema changes, added and removed rows, and which
+fields moved. Zero dependencies.
+
+```bash
+cargo install drift-diff
+```
+
+```bash
+drift before.csv after.csv --key id
+```
+
+```
+schema
+  + column region
+
+changed · 2
+  1041
+    status: pending → shipped
+  1077
+    total: 19.99 → 24.99
+
+removed · 1
+  − 1002
+
+312 unchanged · 2 changed · 0 added · 1 removed
+```
+
+## Keyed, not positional
+
+`diff` on two exports reports every row after the first insertion as changed.
+That is true of the text and useless about the data.
+
+`drift` matches rows on a key column, so a row that only moved is unchanged and
+only a row whose fields actually differ is reported. Sorting a file, appending
+to it, or re-exporting in a different order produces no diff at all.
+
+## What it will not do
+
+**Report a schema change twice.** A column that exists on one side only is a
+schema change, printed once. It is excluded from the field comparison, so it
+does not also appear as a change on every single row.
+
+**Silently pick a winner for duplicate keys.** With a repeated key there is no
+single "before" row to compare against, and choosing one quietly would make the
+diff depend on file order. Duplicates are reported as a warning.
+
+**Truncate without saying so.** Long lists stop at 20 entries and print how many
+more there are. A diff that hides rows silently reads as a complete answer and
+is not one.
+
+**Print in a different order each run.** Everything is sorted before output, so
+two runs over the same input are byte-identical and the result can be committed
+as a fixture.
+
+## Exit codes
+
+`0` identical · `1` differences found · `2` could not run
+
+The exit code is the point for scripting — a pipeline can ask "did this dataset
+move" without parsing anything:
+
+```bash
+drift yesterday.csv today.csv --key id --quiet || echo "data changed"
+```
+
+## Zero dependencies
+
+A tool that reads two files and compares them should not pull in a tree you
+then have to audit. The CSV reader is about a hundred lines and covers RFC 4180
+as it actually appears: quoted fields, doubled quotes, embedded commas and
+newlines, `\r\n` and `\n`, ragged rows, and files with no trailing newline.
+
+Not covered, on purpose: custom delimiters, comments, encoding detection. Those
+are the features that turn a parser into a library, and this is not trying to
+be one.
+
+Colour is disabled when `NO_COLOR` is set, and by `--no-color`.
+
+## License
+
+MIT
