@@ -14,16 +14,16 @@ pub struct Report {
     pub added_columns: Vec<String>,
     pub removed_columns: Vec<String>,
     pub reordered: bool,
-    pub added_rows: Vec<String>,
-    pub removed_rows: Vec<String>,
+    pub added_rows: Vec<Key>,
+    pub removed_rows: Vec<Key>,
     pub changed: Vec<Change>,
-    pub duplicate_keys: Vec<String>,
+    pub duplicate_keys: Vec<Key>,
     pub unchanged: usize,
 }
 
 #[derive(Debug)]
 pub struct Change {
-    pub key: String,
+    pub key: Key,
     /// Column, before, after.
     pub fields: Vec<(String, String, String)>,
 }
@@ -41,16 +41,31 @@ impl Report {
     }
 }
 
-/// Index a table by its key column, remembering keys that appear twice.
+/// A row's identity: one field per key column, in the order they were named.
+///
+/// Held as a vector rather than a joined string on purpose. Joining on a
+/// separator makes ("a,b", "c") and ("a", "b,c") the same key, which would
+/// silently pair two unrelated rows — and any separator can appear in data, so
+/// there is no character that makes the problem go away. The vector is only
+/// flattened for display, where a collision costs nothing.
+type Key = Vec<String>;
+
+/// Render a key for output. Single keys print bare, so the common case reads
+/// exactly as it did before composite keys existed.
+pub fn show_key(k: &[String]) -> String {
+    k.join(" · ")
+}
+
+/// Index a table by its key columns, remembering keys that appear twice.
 ///
 /// Duplicates are reported rather than silently resolved: with a repeated key
 /// there is no single "before" row to compare against, and picking one quietly
 /// would make the diff depend on file order.
-fn index(t: &Table, key: usize) -> (HashMap<String, &Vec<String>>, Vec<String>) {
+fn index<'a>(t: &'a Table, keys: &[usize]) -> (HashMap<Key, &'a Vec<String>>, Vec<Key>) {
     let mut map = HashMap::new();
     let mut dupes = Vec::new();
     for row in &t.rows {
-        let k = t.field(row, key).to_string();
+        let k: Key = keys.iter().map(|&i| t.field(row, i).to_string()).collect();
         if map.insert(k.clone(), row).is_some() && !dupes.contains(&k) {
             dupes.push(k);
         }
@@ -94,19 +109,33 @@ impl Tolerance {
     }
 }
 
-pub fn compare(before: &Table, after: &Table, key: &str, tol: Tolerance) -> Result<Report, String> {
-    let bk = before.column(key).ok_or_else(|| {
-        format!(
-            "no column {key:?} in the first file; it has {}",
-            list(&before.header)
-        )
-    })?;
-    let ak = after.column(key).ok_or_else(|| {
-        format!(
-            "no column {key:?} in the second file; it has {}",
-            list(&after.header)
-        )
-    })?;
+/// Resolve key column names to indices in one table, naming the file in the
+/// error so a typo says which side it could not be found on.
+fn key_indices(t: &Table, keys: &[String], which: &str) -> Result<Vec<usize>, String> {
+    keys.iter()
+        .map(|k| {
+            t.column(k).ok_or_else(|| {
+                format!(
+                    "no column {k:?} in the {which} file; it has {}",
+                    list(&t.header)
+                )
+            })
+        })
+        .collect()
+}
+
+pub fn compare(
+    before: &Table,
+    after: &Table,
+    keys: &[String],
+    ignore: &[String],
+    tol: Tolerance,
+) -> Result<Report, String> {
+    if keys.is_empty() {
+        return Err("at least one key column is needed".into());
+    }
+    let bk = key_indices(before, keys, "first")?;
+    let ak = key_indices(after, keys, "second")?;
 
     let added_columns: Vec<String> = after
         .header
@@ -125,8 +154,8 @@ pub fn compare(before: &Table, after: &Table, key: &str, tol: Tolerance) -> Resu
     let reordered =
         added_columns.is_empty() && removed_columns.is_empty() && before.header != after.header;
 
-    let (bmap, mut dupes) = index(before, bk);
-    let (amap, adupes) = index(after, ak);
+    let (bmap, mut dupes) = index(before, &bk);
+    let (amap, adupes) = index(after, &ak);
     for d in adupes {
         if !dupes.contains(&d) {
             dupes.push(d);
@@ -136,10 +165,17 @@ pub fn compare(before: &Table, after: &Table, key: &str, tol: Tolerance) -> Resu
     // Compare only the columns both files have; a column that exists on one
     // side is a schema change, already reported, and would otherwise show up
     // again as a change on every single row.
+    //
+    // Ignored columns drop out here too. The usual reason is a timestamp that
+    // moves on every export and drowns the fields anyone cares about, and the
+    // point of dropping it at this step is that an ignored column cannot make
+    // a row count as changed — it is not compared at all rather than compared
+    // and forgiven.
     let shared: Vec<&String> = before
         .header
         .iter()
         .filter(|c| after.header.contains(c))
+        .filter(|c| !ignore.contains(c))
         .collect();
 
     let mut added_rows = Vec::new();
@@ -210,11 +246,18 @@ mod tests {
     use super::*;
     use crate::csv::parse;
 
+    /// Keys as display strings, so an assertion reads as the output does
+    /// rather than as a vector of vectors.
+    fn shown(keys: &[Key]) -> Vec<String> {
+        keys.iter().map(|k| show_key(k)).collect()
+    }
+
     fn cmp(a: &str, b: &str) -> Report {
         compare(
             &parse(a).unwrap(),
             &parse(b).unwrap(),
-            "id",
+            &["id".into()],
+            &[],
             Tolerance::Exact,
         )
         .unwrap()
@@ -224,7 +267,8 @@ mod tests {
         compare(
             &parse(a).unwrap(),
             &parse(b).unwrap(),
-            "id",
+            &["id".into()],
+            &[],
             Tolerance::Absolute(eps),
         )
         .unwrap()
@@ -255,8 +299,8 @@ mod tests {
     #[test]
     fn added_and_removed_rows() {
         let r = cmp("id,v\n1,a\n2,b\n", "id,v\n2,b\n3,c\n");
-        assert_eq!(r.removed_rows, ["1"]);
-        assert_eq!(r.added_rows, ["3"]);
+        assert_eq!(shown(&r.removed_rows), ["1"]);
+        assert_eq!(shown(&r.added_rows), ["3"]);
     }
 
     #[test]
@@ -285,7 +329,7 @@ mod tests {
     #[test]
     fn duplicate_keys_are_reported() {
         let r = cmp("id,v\n1,a\n1,b\n", "id,v\n1,a\n");
-        assert_eq!(r.duplicate_keys, ["1"]);
+        assert_eq!(shown(&r.duplicate_keys), ["1"]);
     }
 
     #[test]
@@ -293,7 +337,8 @@ mod tests {
         let e = compare(
             &parse("a\n1\n").unwrap(),
             &parse("a\n1\n").unwrap(),
-            "id",
+            &["id".into()],
+            &[],
             Tolerance::Exact,
         )
         .unwrap_err();
@@ -415,6 +460,135 @@ mod tests {
     #[test]
     fn output_order_is_stable() {
         let r = cmp("id,v\n3,a\n1,a\n2,a\n", "id,v\n\n");
-        assert_eq!(r.removed_rows, ["1", "2", "3"]);
+        assert_eq!(shown(&r.removed_rows), ["1", "2", "3"]);
+    }
+
+    fn cmp_keys(a: &str, b: &str, keys: &[&str], ignore: &[&str]) -> Report {
+        compare(
+            &parse(a).unwrap(),
+            &parse(b).unwrap(),
+            &keys.iter().map(|k| k.to_string()).collect::<Vec<_>>(),
+            &ignore.iter().map(|k| k.to_string()).collect::<Vec<_>>(),
+            Tolerance::Exact,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn composite_key_identifies_a_row_by_both_columns() {
+        // Neither column alone is unique; together they are.
+        let before = "region,id,v
+us,1,a
+eu,1,b
+";
+        let after = "region,id,v
+us,1,a
+eu,1,CHANGED
+";
+        let r = cmp_keys(before, after, &["region", "id"], &[]);
+        assert_eq!(r.unchanged, 1);
+        assert_eq!(
+            shown(&r.changed.iter().map(|c| c.key.clone()).collect::<Vec<_>>()),
+            ["eu · 1"]
+        );
+    }
+
+    #[test]
+    fn a_single_column_key_is_not_reported_as_a_duplicate_when_composite() {
+        // Keyed on id alone these two rows collide; keyed on both they do not.
+        let f = "region,id,v
+us,1,a
+eu,1,b
+";
+        assert!(cmp_keys(f, f, &["id"], &[]).duplicate_keys.len() == 1);
+        assert!(cmp_keys(f, f, &["region", "id"], &[])
+            .duplicate_keys
+            .is_empty());
+    }
+
+    #[test]
+    fn key_parts_are_not_joined_into_an_ambiguous_string() {
+        // ("a,b", "c") and ("a", "b,c") would be the same key under any
+        // separator-joining scheme, which would pair two unrelated rows.
+        let before = "x,y,v
+\"a,b\",c,1
+a,\"b,c\",2
+";
+        let after = before;
+        let r = cmp_keys(before, after, &["x", "y"], &[]);
+        assert!(r.duplicate_keys.is_empty(), "{:?}", r.duplicate_keys);
+        assert_eq!(r.unchanged, 2);
+    }
+
+    #[test]
+    fn an_ignored_column_cannot_make_a_row_changed() {
+        let before = "id,v,updated
+1,a,09:00
+";
+        let after = "id,v,updated
+1,a,17:00
+";
+        assert_eq!(cmp_keys(before, after, &["id"], &[]).changed.len(), 1);
+
+        let r = cmp_keys(before, after, &["id"], &["updated"]);
+        assert!(r.changed.is_empty());
+        assert_eq!(r.unchanged, 1);
+    }
+
+    #[test]
+    fn ignoring_a_column_does_not_hide_a_real_change_elsewhere() {
+        let before = "id,v,updated
+1,a,09:00
+";
+        let after = "id,v,updated
+1,CHANGED,17:00
+";
+        let r = cmp_keys(before, after, &["id"], &["updated"]);
+        assert_eq!(r.changed.len(), 1);
+        // Only the column that actually moved, not the ignored one.
+        assert_eq!(r.changed[0].fields.len(), 1);
+        assert_eq!(r.changed[0].fields[0].0, "v");
+    }
+
+    #[test]
+    fn ignoring_a_column_that_does_not_exist_is_harmless() {
+        let f = "id,v
+1,a
+";
+        assert_eq!(cmp_keys(f, f, &["id"], &["nosuch"]).unchanged, 1);
+    }
+
+    #[test]
+    fn a_missing_key_column_says_which_file() {
+        let e = compare(
+            &parse(
+                "id,v
+1,a
+",
+            )
+            .unwrap(),
+            &parse(
+                "v
+a
+",
+            )
+            .unwrap(),
+            &["id".into()],
+            &[],
+            Tolerance::Exact,
+        )
+        .unwrap_err();
+        assert!(e.contains("second"), "{e}");
+    }
+
+    #[test]
+    fn no_key_columns_is_an_error() {
+        let t = parse(
+            "id
+1
+",
+        )
+        .unwrap();
+        assert!(compare(&t, &t, &[], &[], Tolerance::Exact).is_err());
     }
 }

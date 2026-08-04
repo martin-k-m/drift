@@ -12,7 +12,8 @@ usage:
   drift <before.csv> <after.csv> --key <column> [options]
 
 options:
-  -k, --key <column>   column that identifies a row (required)
+  -k, --key <columns>  column(s) that identify a row, comma-separated (required)
+  -i, --ignore <cols>  columns to leave out of the comparison, comma-separated
   -e, --epsilon <n>    treat numbers within n of each other as unchanged
       --quiet          print nothing; use the exit code
       --no-color       plain output
@@ -33,7 +34,8 @@ still compared exactly: a value that does not parse is never waved through.
 struct Args {
     before: String,
     after: String,
-    key: String,
+    keys: Vec<String>,
+    ignore: Vec<String>,
     quiet: bool,
     color: bool,
     tol: diff::Tolerance,
@@ -41,7 +43,8 @@ struct Args {
 
 fn parse_args() -> Result<Option<Args>, String> {
     let mut positional = Vec::new();
-    let mut key = None;
+    let mut keys: Vec<String> = Vec::new();
+    let mut ignore: Vec<String> = Vec::new();
     let mut epsilon: Option<f64> = None;
     let mut quiet = false;
     // Colour off when the output is redirected: escape codes in a file someone
@@ -63,7 +66,12 @@ fn parse_args() -> Result<Option<Args>, String> {
             "--quiet" => quiet = true,
             "--no-color" => color = false,
             "-k" | "--key" => {
-                key = Some(it.next().ok_or("--key needs a column name")?);
+                let raw = it.next().ok_or("--key needs a column name")?;
+                keys.extend(split_columns(&raw));
+            }
+            "-i" | "--ignore" => {
+                let raw = it.next().ok_or("--ignore needs a column name")?;
+                ignore.extend(split_columns(&raw));
             }
             "-e" | "--epsilon" => {
                 let raw = it.next().ok_or("--epsilon needs a number")?;
@@ -88,12 +96,23 @@ fn parse_args() -> Result<Option<Args>, String> {
             positional.len()
         ));
     }
-    let key = key.ok_or("--key is required: drift needs to know what identifies a row")?;
+    if keys.is_empty() {
+        return Err("--key is required: drift needs to know what identifies a row".into());
+    }
+    // A key column that is also ignored would be compared as identity and not
+    // as a field, which is not wrong so much as a sign the command says
+    // something its author did not mean.
+    if let Some(k) = keys.iter().find(|k| ignore.contains(k)) {
+        return Err(format!(
+            "{k:?} is both a key and ignored; a key is never compared anyway"
+        ));
+    }
 
     Ok(Some(Args {
         before: positional[0].clone(),
         after: positional[1].clone(),
-        key,
+        keys,
+        ignore,
         quiet,
         color,
         tol: match epsilon {
@@ -106,6 +125,16 @@ fn parse_args() -> Result<Option<Args>, String> {
 fn read(path: &str) -> Result<csv::Table, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
     csv::parse(&text).map_err(|e| format!("{path}: {e}"))
+}
+
+/// Split a comma-separated column list, dropping blanks so `--key id,` and a
+/// stray double comma are not silently turned into an empty column name.
+fn split_columns(raw: &str) -> Vec<String> {
+    raw.split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect()
 }
 
 fn main() -> ExitCode {
@@ -126,7 +155,7 @@ fn main() -> ExitCode {
         }
     };
 
-    let report = match diff::compare(&before, &after, &args.key, args.tol) {
+    let report = match diff::compare(&before, &after, &args.keys, &args.ignore, args.tol) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("drift: {e}");
@@ -200,7 +229,7 @@ fn print(r: &diff::Report, color: bool) {
     if !r.changed.is_empty() {
         println!("changed · {}", r.changed.len());
         for ch in r.changed.iter().take(SHOWN) {
-            println!("  {}", c.yellow(&ch.key));
+            println!("  {}", c.yellow(&diff::show_key(&ch.key)));
             for (col, b, a) in &ch.fields {
                 println!("    {col}: {} → {}", c.red(b), c.green(a));
             }
@@ -225,7 +254,7 @@ fn print(r: &diff::Report, color: bool) {
         }
         println!("{label} · {}", keys.len());
         for k in keys.iter().take(SHOWN) {
-            println!("  {mark} {k}");
+            println!("  {mark} {}", diff::show_key(k));
         }
         if keys.len() > SHOWN {
             println!("  {}", c.dim(&format!("… and {} more", keys.len() - SHOWN)));
@@ -242,7 +271,7 @@ fn print(r: &diff::Report, color: bool) {
             ))
         );
         for k in r.duplicate_keys.iter().take(SHOWN) {
-            println!("  {k}");
+            println!("  {}", diff::show_key(k));
         }
         println!();
     }

@@ -9,6 +9,7 @@ cargo install drift-diff
 
 ```bash
 drift before.csv after.csv --key id
+drift before.csv after.csv --key region,id --ignore updated_at
 ```
 
 ```
@@ -35,6 +36,24 @@ That is true of the text and useless about the data.
 `drift` matches rows on a key column, so a row that only moved is unchanged and
 only a row whose fields actually differ is reported. Sorting a file, appending
 to it, or re-exporting in a different order produces no diff at all.
+
+## Composite keys
+
+`--key region,id` when no single column identifies a row. The parts are kept
+separate rather than joined into one string, because any separator can appear
+in the data: joined on a comma, `("a,b", "c")` and `("a", "b,c")` become the
+same key and two unrelated rows get paired.
+
+## Columns that always move
+
+An `updated_at` that changes on every export makes every row a change and
+buries the fields anyone cares about. `--ignore updated_at,exported_by` leaves
+those columns out of the comparison entirely — not compared and forgiven, but
+never compared, so they cannot make a row count as changed.
+
+A column named as both a key and ignored is an error. A key is never compared
+as a field anyway, so the command is not wrong so much as not what its author
+meant.
 
 ## Float noise
 
