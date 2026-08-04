@@ -58,7 +58,43 @@ fn index(t: &Table, key: usize) -> (HashMap<String, &Vec<String>>, Vec<String>) 
     (map, dupes)
 }
 
-pub fn compare(before: &Table, after: &Table, key: &str) -> Result<Report, String> {
+/// How two field values are judged equal.
+#[derive(Clone, Copy)]
+pub enum Tolerance {
+    /// Byte equality. "1.0" and "1.00" are different.
+    Exact,
+    /// Numeric where both sides parse as numbers, byte equality otherwise.
+    Absolute(f64),
+}
+
+impl Tolerance {
+    fn same(self, a: &str, b: &str) -> bool {
+        if a == b {
+            return true;
+        }
+        match self {
+            Tolerance::Exact => false,
+            Tolerance::Absolute(eps) => match (a.trim().parse::<f64>(), b.trim().parse::<f64>()) {
+                // Only when *both* sides are numbers. A column holding "1" and
+                // "one" must not be quietly declared equal because one side
+                // failed to parse.
+                (Ok(x), Ok(y)) => {
+                    // NaN never equals anything, including itself, and a diff
+                    // that reported two NaNs as unchanged would be hiding the
+                    // fact that neither is a number any more.
+                    if x.is_nan() || y.is_nan() {
+                        false
+                    } else {
+                        (x - y).abs() <= eps
+                    }
+                }
+                _ => false,
+            },
+        }
+    }
+}
+
+pub fn compare(before: &Table, after: &Table, key: &str, tol: Tolerance) -> Result<Report, String> {
     let bk = before.column(key).ok_or_else(|| {
         format!(
             "no column {key:?} in the first file; it has {}",
@@ -119,7 +155,7 @@ pub fn compare(before: &Table, after: &Table, key: &str) -> Result<Report, Strin
                 for col in &shared {
                     let b = before.field(brow, before.column(col).unwrap());
                     let a = after.field(arow, after.column(col).unwrap());
-                    if b != a {
+                    if !tol.same(b, a) {
                         fields.push(((*col).clone(), b.to_string(), a.to_string()));
                     }
                 }
@@ -175,7 +211,23 @@ mod tests {
     use crate::csv::parse;
 
     fn cmp(a: &str, b: &str) -> Report {
-        compare(&parse(a).unwrap(), &parse(b).unwrap(), "id").unwrap()
+        compare(
+            &parse(a).unwrap(),
+            &parse(b).unwrap(),
+            "id",
+            Tolerance::Exact,
+        )
+        .unwrap()
+    }
+
+    fn cmp_eps(a: &str, b: &str, eps: f64) -> Report {
+        compare(
+            &parse(a).unwrap(),
+            &parse(b).unwrap(),
+            "id",
+            Tolerance::Absolute(eps),
+        )
+        .unwrap()
     }
 
     #[test]
@@ -238,9 +290,126 @@ mod tests {
 
     #[test]
     fn missing_key_column_names_what_is_there() {
-        let e = compare(&parse("a\n1\n").unwrap(), &parse("a\n1\n").unwrap(), "id").unwrap_err();
+        let e = compare(
+            &parse("a\n1\n").unwrap(),
+            &parse("a\n1\n").unwrap(),
+            "id",
+            Tolerance::Exact,
+        )
+        .unwrap_err();
         assert!(e.contains("\"id\""), "{e}");
         assert!(e.contains("it has a"), "{e}");
+    }
+
+    #[test]
+    fn tolerance_absorbs_float_noise() {
+        // The case this exists for: a pipeline re-run that changes the last
+        // digit of every float and nothing else.
+        let r = cmp_eps(
+            "id,v
+1,0.1000001
+",
+            "id,v
+1,0.1000002
+",
+            1e-6,
+        );
+        assert!(!r.any());
+        assert_eq!(r.unchanged, 1);
+    }
+
+    #[test]
+    fn tolerance_still_reports_a_real_move() {
+        let r = cmp_eps(
+            "id,v
+1,10.0
+",
+            "id,v
+1,10.5
+",
+            1e-6,
+        );
+        assert_eq!(r.changed.len(), 1);
+    }
+
+    #[test]
+    fn tolerance_does_not_apply_to_text() {
+        // "one" does not parse, so this must stay a change rather than being
+        // waved through because the comparison could not be made.
+        let r = cmp_eps(
+            "id,v
+1,one
+",
+            "id,v
+1,two
+",
+            1000.0,
+        );
+        assert_eq!(r.changed.len(), 1);
+    }
+
+    #[test]
+    fn tolerance_treats_equal_text_as_equal() {
+        let r = cmp_eps(
+            "id,v
+1,abc
+",
+            "id,v
+1,abc
+",
+            1e-9,
+        );
+        assert!(!r.any());
+    }
+
+    #[test]
+    fn nan_is_never_unchanged() {
+        let r = cmp_eps(
+            "id,v
+1,NaN
+",
+            "id,v
+1,NaN
+",
+            1e9,
+        );
+        // Byte-equal, so it is unchanged — the guard is that tolerance does not
+        // *additionally* declare two different NaN spellings equal.
+        assert!(!r.any());
+        let r2 = cmp_eps(
+            "id,v
+1,NaN
+",
+            "id,v
+1,nan
+",
+            1e9,
+        );
+        assert_eq!(r2.changed.len(), 1);
+    }
+
+    #[test]
+    fn exact_mode_sees_formatting_changes() {
+        let r = cmp(
+            "id,v
+1,1.0
+",
+            "id,v
+1,1.00
+",
+        );
+        assert_eq!(r.changed.len(), 1);
+        // And tolerance is what makes them the same number.
+        assert!(!cmp_eps(
+            "id,v
+1,1.0
+",
+            "id,v
+1,1.00
+",
+            0.0
+        )
+        .any());
     }
 
     #[test]

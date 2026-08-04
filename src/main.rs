@@ -13,6 +13,7 @@ usage:
 
 options:
   -k, --key <column>   column that identifies a row (required)
+  -e, --epsilon <n>    treat numbers within n of each other as unchanged
       --quiet          print nothing; use the exit code
       --no-color       plain output
   -h, --help           this
@@ -23,6 +24,10 @@ exit codes:
 
 Rows are matched on the key, not by position, so a row that only moved is
 unchanged. Comparing exit code 1 is how a pipeline asks \"did this data move\".
+
+--epsilon compares numerically where both sides are numbers, so a pipeline that
+rewrites 0.1000001 as 0.1000002 stops reporting every row as changed. Text is
+still compared exactly: a value that does not parse is never waved through.
 ";
 
 struct Args {
@@ -31,11 +36,13 @@ struct Args {
     key: String,
     quiet: bool,
     color: bool,
+    tol: diff::Tolerance,
 }
 
 fn parse_args() -> Result<Option<Args>, String> {
     let mut positional = Vec::new();
     let mut key = None;
+    let mut epsilon: Option<f64> = None;
     let mut quiet = false;
     // Colour off when the output is redirected: escape codes in a file someone
     // then diffs are noise. There is no isatty in std, so honour NO_COLOR and
@@ -58,6 +65,16 @@ fn parse_args() -> Result<Option<Args>, String> {
             "-k" | "--key" => {
                 key = Some(it.next().ok_or("--key needs a column name")?);
             }
+            "-e" | "--epsilon" => {
+                let raw = it.next().ok_or("--epsilon needs a number")?;
+                let v: f64 = raw
+                    .parse()
+                    .map_err(|_| format!("--epsilon wants a number, got {raw:?}"))?;
+                if !v.is_finite() || v < 0.0 {
+                    return Err(format!("--epsilon must be zero or more, got {raw}"));
+                }
+                epsilon = Some(v);
+            }
             s if s.starts_with('-') && s.len() > 1 => {
                 return Err(format!("unknown option {s}"));
             }
@@ -79,6 +96,10 @@ fn parse_args() -> Result<Option<Args>, String> {
         key,
         quiet,
         color,
+        tol: match epsilon {
+            Some(e) => diff::Tolerance::Absolute(e),
+            None => diff::Tolerance::Exact,
+        },
     }))
 }
 
@@ -105,7 +126,7 @@ fn main() -> ExitCode {
         }
     };
 
-    let report = match diff::compare(&before, &after, &args.key) {
+    let report = match diff::compare(&before, &after, &args.key, args.tol) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("drift: {e}");

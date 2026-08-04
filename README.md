@@ -36,6 +36,20 @@ That is true of the text and useless about the data.
 only a row whose fields actually differ is reported. Sorting a file, appending
 to it, or re-exporting in a different order produces no diff at all.
 
+## Float noise
+
+A pipeline re-run that rewrites `0.1000001` as `0.1000002` changes every row and
+means nothing. `--epsilon` compares numerically where both sides are numbers:
+
+```bash
+drift before.csv after.csv --key id --epsilon 1e-6
+```
+
+Text is still compared exactly. A value that does not parse as a number is never
+waved through because the comparison could not be made — `one` against `two`
+stays a change no matter how large the tolerance. Two differently-spelled NaNs
+stay a change for the same reason.
+
 ## What it will not do
 
 **Report a schema change twice.** A column that exists on one side only is a
