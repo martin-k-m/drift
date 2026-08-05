@@ -2,6 +2,7 @@
 
 mod csv;
 mod diff;
+mod json;
 
 use std::process::ExitCode;
 
@@ -15,6 +16,7 @@ options:
   -k, --key <columns>  column(s) that identify a row, comma-separated (required)
   -i, --ignore <cols>  columns to leave out of the comparison, comma-separated
   -e, --epsilon <n>    treat numbers within n of each other as unchanged
+      --json           write the report as JSON instead of for a person
       --quiet          print nothing; use the exit code
       --no-color       plain output
   -h, --help           this
@@ -38,6 +40,7 @@ struct Args {
     ignore: Vec<String>,
     quiet: bool,
     color: bool,
+    json: bool,
     tol: diff::Tolerance,
 }
 
@@ -51,6 +54,7 @@ fn parse_args() -> Result<Option<Args>, String> {
     // then diffs are noise. There is no isatty in std, so honour NO_COLOR and
     // let --no-color cover the rest.
     let mut color = std::env::var_os("NO_COLOR").is_none();
+    let mut json = false;
 
     let mut it = std::env::args().skip(1);
     while let Some(a) = it.next() {
@@ -65,6 +69,7 @@ fn parse_args() -> Result<Option<Args>, String> {
             }
             "--quiet" => quiet = true,
             "--no-color" => color = false,
+            "--json" => json = true,
             "-k" | "--key" => {
                 let raw = it.next().ok_or("--key needs a column name")?;
                 keys.extend(split_columns(&raw));
@@ -115,6 +120,7 @@ fn parse_args() -> Result<Option<Args>, String> {
         ignore,
         quiet,
         color,
+        json,
         tol: match epsilon {
             Some(e) => diff::Tolerance::Absolute(e),
             None => diff::Tolerance::Exact,
@@ -163,7 +169,11 @@ fn main() -> ExitCode {
         }
     };
 
-    if !args.quiet {
+    if args.json {
+        // --json wins over --quiet: a caller asking for the report in a form a
+        // script can read has said what they want, and silence is not it.
+        print!("{}", json::report(&report, &args.keys));
+    } else if !args.quiet {
         print(&report, args.color);
     }
 

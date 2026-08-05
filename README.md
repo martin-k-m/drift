@@ -87,6 +87,29 @@ is not one.
 two runs over the same input are byte-identical and the result can be committed
 as a fixture.
 
+## JSON output
+
+```sh
+drift before.csv after.csv --key id --json
+```
+
+The exit code answers "did the data move" and nothing else, so a pipeline that
+wants to know *what* moved had to parse output written for a person, which is
+output that is allowed to change. `--json` writes the whole report instead.
+
+Keys are arrays rather than the joined display form, because a consumer that
+has to split `"a . b"` back apart is one whose data cannot contain the
+separator. There is an `identical` field so a caller can branch without
+re-deriving it from four empty arrays and getting the duplicate-key case wrong.
+
+`--json` wins over `--quiet`: asking for the report in a form a script can read
+is a statement about what you want, and silence is not it.
+
+Written by hand, like the CSV reader, so the dependency count stays at zero.
+Escaping is the whole job: cell values are arbitrary bytes from somebody's
+export, and control characters that are legal in a CSV field are illegal raw in
+a JSON string.
+
 ## Exit codes
 
 `0` identical · `1` differences found · `2` could not run
