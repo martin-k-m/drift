@@ -126,7 +126,8 @@ drift yesterday.csv today.csv --key id --quiet || echo "data changed"
 A tool that reads two files and compares them should not pull in a tree you
 then have to audit. The CSV reader is about a hundred lines and covers RFC 4180
 as it actually appears: quoted fields, doubled quotes, embedded commas and
-newlines, `\r\n` and `\n`, ragged rows, and files with no trailing newline.
+newlines, `\r\n` and `\n`, ragged rows, a leading byte-order mark, and files
+with no trailing newline.
 
 Not covered, on purpose: custom delimiters, comments, encoding detection. Those
 are the features that turn a parser into a library, and this is not trying to

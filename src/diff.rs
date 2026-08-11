@@ -591,4 +591,76 @@ a
         .unwrap();
         assert!(compare(&t, &t, &[], &[], Tolerance::Exact).is_err());
     }
+
+    #[test]
+    fn a_column_added_and_another_removed_are_both_reported() {
+        let r = cmp("id,gone\n1,x\n", "id,fresh\n1,y\n");
+        assert_eq!(r.removed_columns, ["gone"]);
+        assert_eq!(r.added_columns, ["fresh"]);
+        // Neither of the one-sided columns is in the field comparison, so the
+        // row is unchanged on its shared columns (there are none besides id).
+        assert!(r.changed.is_empty());
+        assert_eq!(r.unchanged, 1);
+    }
+
+    #[test]
+    fn reordering_is_not_flagged_when_a_column_is_also_added() {
+        // added/removed already say the sets differ; reordered is only for the
+        // case where the sets match but the order does not.
+        let r = cmp("id,a,b\n1,x,y\n", "id,b,a,c\n1,y,x,z\n");
+        assert_eq!(r.added_columns, ["c"]);
+        assert!(!r.reordered);
+    }
+
+    #[test]
+    fn a_duplicate_on_only_one_side_is_still_reported() {
+        let r = cmp("id,v\n1,a\n1,a\n", "id,v\n1,a\n");
+        assert_eq!(shown(&r.duplicate_keys), ["1"]);
+    }
+
+    #[test]
+    fn identical_data_with_duplicate_keys_is_not_a_difference_but_keeps_the_warning() {
+        // Regression: the human printer used to return early on `!any()` and
+        // swallow this warning. The report itself must carry both facts.
+        let r = cmp("id,v\n1,a\n1,a\n", "id,v\n1,a\n1,a\n");
+        assert!(!r.any());
+        assert_eq!(shown(&r.duplicate_keys), ["1"]);
+    }
+
+    #[test]
+    fn a_missing_key_field_reads_as_empty_and_pairs_by_that_empty_key() {
+        // The second row is short and has no "v", so its key is "". A row keyed
+        // on "" on each side pairs like any other. id is ignored so its values
+        // do not enter the comparison.
+        let r = cmp_keys("id,v\na,x\nb\n", "id,v\na,x\nc\n", &["v"], &["id"]);
+        assert_eq!(r.unchanged, 2);
+        assert!(r.duplicate_keys.is_empty());
+    }
+
+    #[test]
+    fn epsilon_treats_integer_and_decimal_spellings_of_one_value_as_equal() {
+        let r = cmp_eps("id,v\n1,10\n", "id,v\n1,10.0\n", 0.0);
+        assert!(!r.any());
+    }
+
+    #[test]
+    fn epsilon_ignores_surrounding_whitespace_in_numbers() {
+        let r = cmp_eps("id,v\n1,1.0\n", "id,v\n1, 1.0 \n", 1e-9);
+        assert!(!r.any());
+    }
+
+    #[test]
+    fn only_the_fields_that_moved_are_listed_for_a_changed_row() {
+        let r = cmp("id,a,b,c\n1,x,y,z\n", "id,a,b,c\n1,x,Y,Z\n");
+        assert_eq!(r.changed.len(), 1);
+        let cols: Vec<&str> = r.changed[0].fields.iter().map(|f| f.0.as_str()).collect();
+        assert_eq!(cols, ["b", "c"]);
+    }
+
+    #[test]
+    fn changed_rows_are_sorted_by_key() {
+        let r = cmp("id,v\n3,a\n1,a\n2,a\n", "id,v\n3,z\n1,z\n2,z\n");
+        let keys: Vec<String> = r.changed.iter().map(|c| show_key(&c.key)).collect();
+        assert_eq!(keys, ["1", "2", "3"]);
+    }
 }

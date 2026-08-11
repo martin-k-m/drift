@@ -31,6 +31,12 @@ impl Table {
 
 /// Parse a whole CSV document.
 pub fn parse(input: &str) -> Result<Table, String> {
+    // A leading UTF-8 BOM is common in exports (Excel writes one) and would
+    // otherwise glue itself to the first column name, so `--key id` fails with
+    // "no column id" over a file that plainly has one. Drop a single leading
+    // BOM. This is not encoding detection: the bytes are still read as UTF-8.
+    let input = input.strip_prefix('\u{feff}').unwrap_or(input);
+
     let mut records = Vec::new();
     let mut field = String::new();
     let mut record: Vec<String> = Vec::new();
@@ -154,5 +160,53 @@ mod tests {
     #[test]
     fn empty_input_is_an_error() {
         assert!(parse("").is_err());
+    }
+
+    #[test]
+    fn a_leading_bom_is_dropped_so_the_first_column_is_named() {
+        // Excel-style export: a UTF-8 BOM ahead of the header. Without dropping
+        // it the first column reads as "\u{feff}id" and no key matches.
+        let t = parse("\u{feff}id,v\n1,a\n").unwrap();
+        assert_eq!(t.header, ["id", "v"]);
+        assert_eq!(t.column("id"), Some(0));
+    }
+
+    #[test]
+    fn only_one_leading_bom_is_dropped() {
+        // A second BOM is data, not a marker, and stays on the field.
+        let t = parse("\u{feff}\u{feff}id\n1\n").unwrap();
+        assert_eq!(t.header, ["\u{feff}id"]);
+    }
+
+    #[test]
+    fn a_bare_cr_is_a_line_break() {
+        // Old-Mac line endings: a lone \r with no following \n still ends a row.
+        let t = parse("a,b\r1,2\r").unwrap();
+        assert_eq!(t.rows, [["1", "2"]]);
+    }
+
+    #[test]
+    fn a_quoted_field_may_be_empty() {
+        let t = parse("a,b\n\"\",x\n").unwrap();
+        assert_eq!(t.rows[0], ["", "x"]);
+    }
+
+    #[test]
+    fn a_quoted_field_may_hold_a_comma_only() {
+        let t = parse("a\n\",\"\n").unwrap();
+        assert_eq!(t.rows[0], [","]);
+    }
+
+    #[test]
+    fn trailing_blank_lines_are_not_rows() {
+        let t = parse("a\n1\n\n\n").unwrap();
+        assert_eq!(t.rows, [["1"]]);
+    }
+
+    #[test]
+    fn a_header_only_file_has_no_rows() {
+        let t = parse("a,b\n").unwrap();
+        assert_eq!(t.header, ["a", "b"]);
+        assert!(t.rows.is_empty());
     }
 }

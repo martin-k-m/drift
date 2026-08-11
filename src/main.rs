@@ -215,11 +215,17 @@ fn print(r: &diff::Report, color: bool) {
     let c = Paint(color);
 
     if !r.any() {
-        println!(
-            "{}",
-            c.dim(&format!("no differences · {} rows match", r.unchanged))
-        );
-        return;
+        // Nothing moved, but duplicate keys are still a warning the reader
+        // needs: the comparison quietly used one row per key, and README
+        // promises that is never hidden. Fall through to print it rather than
+        // returning here; otherwise say there are no differences and stop.
+        if r.duplicate_keys.is_empty() {
+            println!(
+                "{}",
+                c.dim(&format!("no differences · {} rows match", r.unchanged))
+            );
+            return;
+        }
     }
 
     if !r.added_columns.is_empty() || !r.removed_columns.is_empty() || r.reordered {
