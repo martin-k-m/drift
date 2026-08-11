@@ -1,4 +1,4 @@
-//! drift — diff two tabular datasets.
+//! drift: diff two tabular datasets.
 
 mod csv;
 mod diff;
@@ -7,7 +7,7 @@ mod json;
 use std::process::ExitCode;
 
 const USAGE: &str = "\
-drift — diff two tabular datasets
+drift: diff two tabular datasets
 
 usage:
   drift <before.csv> <after.csv> --key <column> [options]

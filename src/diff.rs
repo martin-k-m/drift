@@ -45,7 +45,7 @@ impl Report {
 ///
 /// Held as a vector rather than a joined string on purpose. Joining on a
 /// separator makes ("a,b", "c") and ("a", "b,c") the same key, which would
-/// silently pair two unrelated rows — and any separator can appear in data, so
+/// silently pair two unrelated rows, and any separator can appear in data, so
 /// there is no character that makes the problem go away. The vector is only
 /// flattened for display, where a collision costs nothing.
 type Key = Vec<String>;
@@ -169,7 +169,7 @@ pub fn compare(
     // Ignored columns drop out here too. The usual reason is a timestamp that
     // moves on every export and drowns the fields anyone cares about, and the
     // point of dropping it at this step is that an ignored column cannot make
-    // a row count as changed — it is not compared at all rather than compared
+    // a row count as changed, it is not compared at all rather than compared
     // and forgiven.
     let shared: Vec<&String> = before
         .header
@@ -418,7 +418,7 @@ mod tests {
 ",
             1e9,
         );
-        // Byte-equal, so it is unchanged — the guard is that tolerance does not
+        // Byte-equal, so it is unchanged, the guard is that tolerance does not
         // *additionally* declare two different NaN spellings equal.
         assert!(!r.any());
         let r2 = cmp_eps(

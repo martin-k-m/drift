@@ -3,7 +3,7 @@
 //!
 //! Covers RFC 4180 as it actually appears: quoted fields, doubled quotes inside
 //! them, embedded commas and newlines, and both line endings. It does not do
-//! custom delimiters, comments, or encoding detection — those are the features
+//! custom delimiters, comments, or encoding detection, those are the features
 //! that turn a parser into a library, and this is not trying to be one.
 
 /// One parsed file: a header and the rows under it.

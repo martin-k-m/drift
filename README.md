@@ -48,7 +48,7 @@ same key and two unrelated rows get paired.
 
 An `updated_at` that changes on every export makes every row a change and
 buries the fields anyone cares about. `--ignore updated_at,exported_by` leaves
-those columns out of the comparison entirely — not compared and forgiven, but
+those columns out of the comparison entirely, not compared and forgiven, but
 never compared, so they cannot make a row count as changed.
 
 A column named as both a key and ignored is an error. A key is never compared
@@ -65,7 +65,7 @@ drift before.csv after.csv --key id --epsilon 1e-6
 ```
 
 Text is still compared exactly. A value that does not parse as a number is never
-waved through because the comparison could not be made — `one` against `two`
+waved through because the comparison could not be made, `one` against `two`
 stays a change no matter how large the tolerance. Two differently-spelled NaNs
 stay a change for the same reason.
 
@@ -114,7 +114,7 @@ a JSON string.
 
 `0` identical · `1` differences found · `2` could not run
 
-The exit code is the point for scripting — a pipeline can ask "did this dataset
+The exit code is the point for scripting, a pipeline can ask "did this dataset
 move" without parsing anything:
 
 ```bash
