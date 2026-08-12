@@ -2,9 +2,12 @@
 //! lines of work.
 //!
 //! Covers RFC 4180 as it actually appears: quoted fields, doubled quotes inside
-//! them, embedded commas and newlines, and both line endings. It does not do
-//! custom delimiters, comments, or encoding detection, those are the features
-//! that turn a parser into a library, and this is not trying to be one.
+//! them, embedded commas and newlines, and both line endings. The field
+//! delimiter is configurable, so TSV and other single-character separated files
+//! read the same way; the quoting rules are unchanged, a delimiter inside a
+//! quoted field is data. It does not do comments or encoding detection, those
+//! are the features that turn a parser into a library, and this is not trying to
+//! be one.
 
 /// One parsed file: a header and the rows under it.
 #[derive(Debug)]
@@ -29,8 +32,19 @@ impl Table {
     }
 }
 
-/// Parse a whole CSV document.
+/// Parse a whole CSV document with a comma delimiter. The tests reach for the
+/// common case by this name; the binary always goes through [`parse_with`].
+#[cfg(test)]
 pub fn parse(input: &str) -> Result<Table, String> {
+    parse_with(input, ',')
+}
+
+/// Parse a whole document, splitting fields on `delim`.
+///
+/// The delimiter is only special outside a quoted field; inside one it is data,
+/// exactly as a comma is in stock CSV, so a tab or a semicolon can appear in a
+/// quoted value without ending the field.
+pub fn parse_with(input: &str, delim: char) -> Result<Table, String> {
     // A leading UTF-8 BOM is common in exports (Excel writes one) and would
     // otherwise glue itself to the first column name, so `--key id` fails with
     // "no column id" over a file that plainly has one. Drop a single leading
@@ -68,7 +82,7 @@ pub fn parse(input: &str) -> Result<Table, String> {
 
         match c {
             '"' if field.is_empty() => in_quotes = true,
-            ',' => record.push(std::mem::take(&mut field)),
+            c if c == delim => record.push(std::mem::take(&mut field)),
             '\r' => {
                 // Swallow the \n of a \r\n pair so it is one line break.
                 if chars.peek() == Some(&'\n') {
@@ -208,5 +222,33 @@ mod tests {
         let t = parse("a,b\n").unwrap();
         assert_eq!(t.header, ["a", "b"]);
         assert!(t.rows.is_empty());
+    }
+
+    #[test]
+    fn a_tab_delimiter_splits_fields() {
+        let t = parse_with("a\tb\n1\t2\n", '\t').unwrap();
+        assert_eq!(t.header, ["a", "b"]);
+        assert_eq!(t.rows, [["1", "2"]]);
+    }
+
+    #[test]
+    fn a_tab_inside_a_quoted_field_stays_in_the_field() {
+        // The quoting rules hold with any delimiter: a tab between quotes is
+        // data, not a field boundary.
+        let t = parse_with("a\tb\n\"x\ty\"\tz\n", '\t').unwrap();
+        assert_eq!(t.rows[0], ["x\ty", "z"]);
+    }
+
+    #[test]
+    fn a_semicolon_delimiter_splits_fields() {
+        let t = parse_with("a;b\n1;2\n", ';').unwrap();
+        assert_eq!(t.rows, [["1", "2"]]);
+    }
+
+    #[test]
+    fn a_comma_is_data_under_a_non_comma_delimiter() {
+        // Unquoted commas are ordinary bytes when the delimiter is a tab.
+        let t = parse_with("a\tb\n1,2\t3\n", '\t').unwrap();
+        assert_eq!(t.rows[0], ["1,2", "3"]);
     }
 }

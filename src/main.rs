@@ -16,6 +16,9 @@ options:
   -k, --key <columns>  column(s) that identify a row, comma-separated (required)
   -i, --ignore <cols>  columns to leave out of the comparison, comma-separated
   -e, --epsilon <n>    treat numbers within n of each other as unchanged
+  -d, --delimiter <c>  field separator; a single character, or the word tab
+                       (also \\t) for a tab. defaults to a comma
+      --summary        print only the counts, not the per-field detail
       --json           write the report as JSON instead of for a person
       --quiet          print nothing; use the exit code
       --no-color       plain output
@@ -41,7 +44,31 @@ struct Args {
     quiet: bool,
     color: bool,
     json: bool,
+    summary: bool,
+    delimiter: char,
     tol: diff::Tolerance,
+}
+
+/// Resolve a `--delimiter` argument to a single character.
+///
+/// A literal tab is awkward to type at a shell, so the word `tab` and the
+/// two-character spelling `\t` both mean one. Anything else must be exactly one
+/// character; a longer string is rejected rather than having its first
+/// character used, which would silently ignore the rest.
+fn parse_delimiter(raw: &str) -> Result<char, String> {
+    match raw {
+        "tab" | "\\t" => Ok('\t'),
+        _ => {
+            let mut chars = raw.chars();
+            match (chars.next(), chars.next()) {
+                (Some(c), None) => Ok(c),
+                (None, _) => Err("--delimiter needs a character".into()),
+                _ => Err(format!(
+                    "--delimiter wants a single character, got {raw:?}; use the word tab for a tab"
+                )),
+            }
+        }
+    }
 }
 
 fn parse_args() -> Result<Option<Args>, String> {
@@ -55,6 +82,8 @@ fn parse_args() -> Result<Option<Args>, String> {
     // let --no-color cover the rest.
     let mut color = std::env::var_os("NO_COLOR").is_none();
     let mut json = false;
+    let mut summary = false;
+    let mut delimiter = ',';
 
     let mut it = std::env::args().skip(1);
     while let Some(a) = it.next() {
@@ -70,6 +99,11 @@ fn parse_args() -> Result<Option<Args>, String> {
             "--quiet" => quiet = true,
             "--no-color" => color = false,
             "--json" => json = true,
+            "--summary" => summary = true,
+            "-d" | "--delimiter" => {
+                let raw = it.next().ok_or("--delimiter needs a character")?;
+                delimiter = parse_delimiter(&raw)?;
+            }
             "-k" | "--key" => {
                 let raw = it.next().ok_or("--key needs a column name")?;
                 keys.extend(split_columns(&raw));
@@ -121,6 +155,8 @@ fn parse_args() -> Result<Option<Args>, String> {
         quiet,
         color,
         json,
+        summary,
+        delimiter,
         tol: match epsilon {
             Some(e) => diff::Tolerance::Absolute(e),
             None => diff::Tolerance::Exact,
@@ -128,9 +164,9 @@ fn parse_args() -> Result<Option<Args>, String> {
     }))
 }
 
-fn read(path: &str) -> Result<csv::Table, String> {
+fn read(path: &str, delimiter: char) -> Result<csv::Table, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
-    csv::parse(&text).map_err(|e| format!("{path}: {e}"))
+    csv::parse_with(&text, delimiter).map_err(|e| format!("{path}: {e}"))
 }
 
 /// Split a comma-separated column list, dropping blanks so `--key id,` and a
@@ -153,7 +189,7 @@ fn main() -> ExitCode {
         }
     };
 
-    let (before, after) = match (read(&args.before), read(&args.after)) {
+    let (before, after) = match (read(&args.before, args.delimiter), read(&args.after, args.delimiter)) {
         (Ok(b), Ok(a)) => (b, a),
         (Err(e), _) | (_, Err(e)) => {
             eprintln!("drift: {e}");
@@ -172,9 +208,18 @@ fn main() -> ExitCode {
     if args.json {
         // --json wins over --quiet: a caller asking for the report in a form a
         // script can read has said what they want, and silence is not it.
-        print!("{}", json::report(&report, &args.keys));
+        // --summary narrows that report to the counts object.
+        if args.summary {
+            print!("{}", json::summary(&report));
+        } else {
+            print!("{}", json::report(&report, &args.keys));
+        }
     } else if !args.quiet {
-        print(&report, args.color);
+        if args.summary {
+            print_summary(&report, args.color);
+        } else {
+            print(&report, args.color);
+        }
     }
 
     if report.any() {
@@ -205,6 +250,38 @@ impl Paint {
         } else {
             s.to_string()
         }
+    }
+}
+
+/// Print only the counts, for scripting and files too large to want the detail.
+///
+/// Same facts as the footer of the full output, plus the schema and duplicate
+/// counts, and nothing per-row. The exit code is unchanged, so this is a
+/// narrower view of the same answer rather than a different one.
+fn print_summary(r: &diff::Report, color: bool) {
+    let c = Paint(color);
+    println!(
+        "columns · {} added · {} removed",
+        r.added_columns.len(),
+        r.removed_columns.len()
+    );
+    println!(
+        "rows · {} added · {} removed · {} changed · {} unchanged",
+        r.added_rows.len(),
+        r.removed_rows.len(),
+        r.changed.len(),
+        r.unchanged
+    );
+    if !r.duplicate_keys.is_empty() {
+        // Never hidden, same as the full output: with a repeated key the
+        // comparison used one row each, and the reader has to know.
+        println!(
+            "{}",
+            c.yellow(&format!(
+                "warning · {} duplicate key(s); comparison used one row each",
+                r.duplicate_keys.len()
+            ))
+        );
     }
 }
 

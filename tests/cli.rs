@@ -200,6 +200,95 @@ fn help_and_version_exit_zero() {
 }
 
 #[test]
+fn a_tab_delimited_file_diffs_with_delimiter_tab() {
+    let s = Scratch::new();
+    let a = s.write("a.tsv", "id\tv\n1\ta\n");
+    let b = s.write("b.tsv", "id\tv\n1\tz\n");
+    let (code, out, _) = run(&[&a, &b, "--key", "id", "--delimiter", "tab"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("a → z"), "{out}");
+}
+
+#[test]
+fn a_quoted_tab_in_a_tsv_field_is_not_a_column_break() {
+    // The value has a tab inside quotes, so the two files match on their single
+    // data column and nothing moved.
+    let s = Scratch::new();
+    let a = s.write("a.tsv", "id\tv\n1\t\"x\ty\"\n");
+    let b = s.write("b.tsv", "id\tv\n1\t\"x\ty\"\n");
+    let (code, out, _) = run(&[&a, &b, "--key", "id", "-d", "tab"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("no differences"), "{out}");
+}
+
+#[test]
+fn a_semicolon_delimiter_is_accepted() {
+    let s = Scratch::new();
+    let a = s.write("a.csv", "id;v\n1;a\n");
+    let b = s.write("b.csv", "id;v\n1;z\n");
+    let (code, out, _) = run(&[&a, &b, "--key", "id", "-d", ";"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("a → z"), "{out}");
+}
+
+#[test]
+fn a_multi_character_delimiter_is_rejected() {
+    let s = Scratch::new();
+    let a = s.write("a.csv", "id,v\n1,a\n");
+    let b = s.write("b.csv", "id,v\n1,a\n");
+    let (code, _, err) = run(&[&a, &b, "--key", "id", "--delimiter", "::"]);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("single character"), "{err}");
+}
+
+#[test]
+fn summary_prints_counts_not_per_field_detail() {
+    let s = Scratch::new();
+    let a = s.write("a.csv", "id,v\n1,a\n2,b\n");
+    let b = s.write("b.csv", "id,v\n1,z\n3,c\n");
+    let (code, out, _) = run(&[&a, &b, "--key", "id", "--summary"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("rows · 1 added · 1 removed · 1 changed"), "{out}");
+    // The per-field detail is not printed in summary mode.
+    assert!(!out.contains("a → z"), "{out}");
+}
+
+#[test]
+fn summary_of_identical_files_exits_zero() {
+    let s = Scratch::new();
+    let a = s.write("a.csv", "id,v\n1,a\n");
+    let b = s.write("b.csv", "id,v\n1,a\n");
+    let (code, out, _) = run(&[&a, &b, "--key", "id", "--summary"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("0 changed · 1 unchanged"), "{out}");
+}
+
+#[test]
+fn summary_reports_duplicate_key_counts() {
+    let s = Scratch::new();
+    let a = s.write("a.csv", "id,v\n1,a\n1,a\n");
+    let b = s.write("b.csv", "id,v\n1,a\n1,a\n");
+    let (code, out, _) = run(&[&a, &b, "--key", "id", "--summary"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("duplicate key"), "{out}");
+}
+
+#[test]
+fn summary_json_emits_just_the_counts_object() {
+    let s = Scratch::new();
+    let a = s.write("a.csv", "id,v\n1,a\n2,b\n");
+    let b = s.write("b.csv", "id,v\n1,z\n3,c\n");
+    let (code, out, _) = run(&[&a, &b, "--key", "id", "--summary", "--json"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("\"rowsChanged\": 1"), "{out}");
+    assert!(out.contains("\"rowsAdded\": 1"), "{out}");
+    assert!(out.contains("\"rowsRemoved\": 1"), "{out}");
+    // The full report's per-row detail is absent.
+    assert!(!out.contains("\"before\""), "{out}");
+    assert!(out.trim_end().ends_with('}'), "{out}");
+}
+
+#[test]
 fn a_bom_in_the_export_does_not_hide_the_key_column() {
     // Excel writes a UTF-8 BOM; without stripping it, --key id fails over a file
     // that plainly has an id column.

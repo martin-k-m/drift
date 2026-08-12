@@ -87,6 +87,37 @@ is not one.
 two runs over the same input are byte-identical and the result can be committed
 as a fixture.
 
+## Other delimiters
+
+Comma is the default. `--delimiter` (or `-d`) takes a single character for
+files separated by something else, and the word `tab` (also `\t`) for a tab,
+since a literal tab is awkward to pass at a shell:
+
+```bash
+drift before.tsv after.tsv --key id --delimiter tab
+drift before.txt after.txt --key id -d ';'
+```
+
+The quoting rules are unchanged with any delimiter, so a tab or a semicolon
+inside a quoted field is data, not a field break. Both files are read with the
+same delimiter. A multi-character delimiter is rejected rather than having its
+first character used, which would silently ignore the rest.
+
+## Summary
+
+`--summary` prints only the counts, columns added and removed, rows added,
+removed, and changed, and a duplicate-key warning if there is one, and none of
+the per-field detail. It is for scripting and for files large enough that the
+full listing is noise. The exit codes are unchanged, so it is a narrower view of
+the same answer:
+
+```
+columns · 1 added · 0 removed
+rows · 1 added · 1 removed · 1 changed · 0 unchanged
+```
+
+With `--json` it emits just the counts object rather than the full report.
+
 ## JSON output
 
 ```sh
@@ -129,9 +160,8 @@ as it actually appears: quoted fields, doubled quotes, embedded commas and
 newlines, `\r\n` and `\n`, ragged rows, a leading byte-order mark, and files
 with no trailing newline.
 
-Not covered, on purpose: custom delimiters, comments, encoding detection. Those
-are the features that turn a parser into a library, and this is not trying to
-be one.
+Not covered, on purpose: comments and encoding detection. Those are the features
+that turn a parser into a library, and this is not trying to be one.
 
 Colour is disabled when `NO_COLOR` is set, and by `--no-color`.
 

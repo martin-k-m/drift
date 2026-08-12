@@ -45,6 +45,28 @@ pub fn report(r: &Report, keys: &[String]) -> String {
     out
 }
 
+/// Render just the counts, for `--summary --json`.
+///
+/// The full report carries every key and field; a caller that only wants the
+/// shape of the change wants numbers, so this is those and nothing per-row.
+/// `identical` is kept so the same branch works as on the full report.
+pub fn summary(r: &Report) -> String {
+    let mut out = String::with_capacity(256);
+    out.push_str("{\n");
+    push_field(&mut out, "identical", &bool_of(!r.any()), false);
+    push_raw(&mut out, "columnsAdded", &r.added_columns.len().to_string());
+    push_raw(&mut out, "columnsRemoved", &r.removed_columns.len().to_string());
+    push_field(&mut out, "columnsReordered", &bool_of(r.reordered), false);
+    push_raw(&mut out, "rowsAdded", &r.added_rows.len().to_string());
+    push_raw(&mut out, "rowsRemoved", &r.removed_rows.len().to_string());
+    push_raw(&mut out, "rowsChanged", &r.changed.len().to_string());
+    push_raw(&mut out, "duplicateKeys", &r.duplicate_keys.len().to_string());
+    // Counts last, and `unchanged` without a trailing comma.
+    out.push_str(&format!("  \"unchanged\": {}\n", r.unchanged));
+    out.push_str("}\n");
+    out
+}
+
 fn bool_of(b: bool) -> String {
     if b {
         "true".into()
@@ -248,5 +270,54 @@ mod tests {
         assert!(!out.contains(",]"), "{out}");
         assert!(!out.contains(", ]"), "{out}");
         assert!(!out.contains(",}"), "{out}");
+    }
+
+    fn summary_for(before: &str, after: &str) -> String {
+        let b = parse(before).unwrap();
+        let a = parse(after).unwrap();
+        let keys = vec!["id".to_string()];
+        let r = compare(&b, &a, &keys, &[], Tolerance::Exact).unwrap();
+        summary(&r)
+    }
+
+    #[test]
+    fn summary_is_counts_only_with_no_per_row_detail() {
+        let out = summary_for("id,v\n1,a\n2,b\n", "id,v,extra\n1,z\n3,c,x\n");
+        // Counts present.
+        assert!(out.contains("\"identical\": false"), "{out}");
+        assert!(out.contains("\"columnsAdded\": 1"), "{out}");
+        assert!(out.contains("\"columnsRemoved\": 0"), "{out}");
+        assert!(out.contains("\"rowsAdded\": 1"), "{out}");
+        assert!(out.contains("\"rowsRemoved\": 1"), "{out}");
+        assert!(out.contains("\"rowsChanged\": 1"), "{out}");
+        assert!(out.contains("\"unchanged\": 0"), "{out}");
+        // No per-row arrays or field detail.
+        assert!(!out.contains("\"changed\": ["), "{out}");
+        assert!(!out.contains("\"before\""), "{out}");
+        assert!(!out.contains("\"addedRows\""), "{out}");
+    }
+
+    #[test]
+    fn summary_of_identical_files_says_so() {
+        let out = summary_for("id,v\n1,a\n", "id,v\n1,a\n");
+        assert!(out.contains("\"identical\": true"), "{out}");
+        assert!(out.contains("\"unchanged\": 1"), "{out}");
+    }
+
+    #[test]
+    fn summary_counts_duplicate_keys() {
+        let out = summary_for("id,v\n1,a\n1,a\n", "id,v\n1,a\n1,a\n");
+        assert!(out.contains("\"duplicateKeys\": 1"), "{out}");
+        // Identical data, so it still says so despite the duplicates.
+        assert!(out.contains("\"identical\": true"), "{out}");
+    }
+
+    #[test]
+    fn summary_ends_in_one_object_and_a_newline() {
+        let out = summary_for("id,v\n1,a\n", "id,v\n1,b\n");
+        assert!(out.starts_with('{'));
+        assert!(out.ends_with("}\n"));
+        // No trailing comma before the close.
+        assert!(!out.contains(",\n}"), "{out}");
     }
 }
