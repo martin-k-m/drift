@@ -248,7 +248,10 @@ fn summary_prints_counts_not_per_field_detail() {
     let b = s.write("b.csv", "id,v\n1,z\n3,c\n");
     let (code, out, _) = run(&[&a, &b, "--key", "id", "--summary"]);
     assert_eq!(code, 1, "{out}");
-    assert!(out.contains("rows · 1 added · 1 removed · 1 changed"), "{out}");
+    assert!(
+        out.contains("rows · 1 added · 1 removed · 1 changed"),
+        "{out}"
+    );
     // The per-field detail is not printed in summary mode.
     assert!(!out.contains("a → z"), "{out}");
 }
