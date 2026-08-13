@@ -189,7 +189,10 @@ fn main() -> ExitCode {
         }
     };
 
-    let (before, after) = match (read(&args.before, args.delimiter), read(&args.after, args.delimiter)) {
+    let (before, after) = match (
+        read(&args.before, args.delimiter),
+        read(&args.after, args.delimiter),
+    ) {
         (Ok(b), Ok(a)) => (b, a),
         (Err(e), _) | (_, Err(e)) => {
             eprintln!("drift: {e}");

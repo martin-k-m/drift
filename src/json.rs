@@ -55,12 +55,20 @@ pub fn summary(r: &Report) -> String {
     out.push_str("{\n");
     push_field(&mut out, "identical", &bool_of(!r.any()), false);
     push_raw(&mut out, "columnsAdded", &r.added_columns.len().to_string());
-    push_raw(&mut out, "columnsRemoved", &r.removed_columns.len().to_string());
+    push_raw(
+        &mut out,
+        "columnsRemoved",
+        &r.removed_columns.len().to_string(),
+    );
     push_field(&mut out, "columnsReordered", &bool_of(r.reordered), false);
     push_raw(&mut out, "rowsAdded", &r.added_rows.len().to_string());
     push_raw(&mut out, "rowsRemoved", &r.removed_rows.len().to_string());
     push_raw(&mut out, "rowsChanged", &r.changed.len().to_string());
-    push_raw(&mut out, "duplicateKeys", &r.duplicate_keys.len().to_string());
+    push_raw(
+        &mut out,
+        "duplicateKeys",
+        &r.duplicate_keys.len().to_string(),
+    );
     // Counts last, and `unchanged` without a trailing comma.
     out.push_str(&format!("  \"unchanged\": {}\n", r.unchanged));
     out.push_str("}\n");
