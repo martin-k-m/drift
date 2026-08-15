@@ -9,6 +9,12 @@ describe the work rather than a downloadable artefact.
 
 ## Unreleased
 
+### Changed
+- The crates.io package name is now `drift-tabular`. It was `drift-diff`, which
+  an unrelated crate claimed in August 2026, so `cargo install drift-diff`
+  installed a different tool and `cargo publish` could never have succeeded. The
+  binary, the repository and every command stay `drift`.
+
 ### Added
 - Contribution, security, and changelog documentation, and status badges in the
   README.

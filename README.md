@@ -13,6 +13,9 @@ Not on crates.io yet. Install from the repository:
 cargo install --git https://github.com/martin-k-m/drift
 ```
 
+The registry name will be `drift-tabular`, because `drift` was taken. The
+command stays `drift` either way; only the package name differs.
+
 ```bash
 drift before.csv after.csv --key id
 drift before.csv after.csv --key region,id --ignore updated_at

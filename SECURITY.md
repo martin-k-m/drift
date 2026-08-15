@@ -3,7 +3,9 @@
 ## Supported versions
 
 `drift` is not published to a registry yet; it is installed from this
-repository. Fixes land on `main`; there are no long-lived maintenance branches.
+repository. When it is published it will be as `drift-tabular`, so a crate named
+`drift` or `drift-diff` is not this project and is not covered by this policy.
+Fixes land on `main`; there are no long-lived maintenance branches.
 
 ## Reporting a vulnerability
 
