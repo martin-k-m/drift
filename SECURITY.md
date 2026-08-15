@@ -2,8 +2,8 @@
 
 ## Supported versions
 
-`drift` is published on crates.io as `drift-diff`. Fixes land on the latest
-released version; there are no long-lived maintenance branches.
+`drift` is not published to a registry yet; it is installed from this
+repository. Fixes land on `main`; there are no long-lived maintenance branches.
 
 ## Reporting a vulnerability
 

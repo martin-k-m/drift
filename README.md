@@ -1,15 +1,16 @@
 # drift
 
 [![CI](https://github.com/martin-k-m/drift/actions/workflows/ci.yml/badge.svg)](https://github.com/martin-k-m/drift/actions/workflows/ci.yml)
-[![crates.io](https://img.shields.io/crates/v/drift-diff.svg)](https://crates.io/crates/drift-diff)
-[![MSRV](https://img.shields.io/badge/rustc-1.74+-blue.svg)](https://blog.rust-lang.org/)
+[![MSRV](https://img.shields.io/badge/rustc-1.74+-blue.svg)](https://blog.rust-lang.org/2023/11/16/Rust-1.74.0.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Diff two tabular datasets. Schema changes, added and removed rows, and which
 fields moved. Zero dependencies.
 
+Not on crates.io yet. Install from the repository:
+
 ```bash
-cargo install drift-diff
+cargo install --git https://github.com/martin-k-m/drift
 ```
 
 ```bash

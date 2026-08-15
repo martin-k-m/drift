@@ -26,3 +26,18 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --all
+
+  # The README advertises a minimum supported Rust version and nothing was
+  # checking it: the matrix above is stable-only, so an accidental use of a
+  # newer standard library method would ship with the 1.74 badge still green.
+  # Pinned to the `rust-version` in Cargo.toml; bump both together.
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.74.0
+      - uses: Swatinem/rust-cache@v2
+      # Build and test only. Clippy and rustfmt are deliberately left to the
+      # stable job, since their lints and formatting change between releases
+      # and pinning them here would fail on style, not on compatibility.
+      - run: cargo test --all
