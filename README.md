@@ -174,6 +174,18 @@ that turn a parser into a library, and this is not trying to be one.
 
 Colour is disabled when `NO_COLOR` is set, and by `--no-color`.
 
+## Related
+
+Four small tools that each do one thing to a table of data:
+
+- [csvpeek](https://github.com/martin-k-m/csvpeek) profiles a file: column
+  types, null counts, distributions.
+- [sift](https://github.com/martin-k-m/sift) queries one: filter, sort,
+  aggregate, streaming.
+- **drift** diffs two of them. The only one of the four in Rust.
+- [quarry](https://github.com/martin-k-m/quarry) is the long way round, a
+  hand-written SQL parser and executor meant to be read.
+
 ## License
 
 MIT
