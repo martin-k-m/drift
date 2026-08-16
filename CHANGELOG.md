@@ -4,27 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims
 to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Neither version below has been tagged or released on GitHub yet, so the entries
-describe the work rather than a downloadable artefact.
+0.1.0 was never tagged or released; it describes the work rather than a
+downloadable artefact. 0.2.0 is the first release.
 
-## Unreleased
+## 0.2.0 - 2026-08-16
 
-### Changed
-- The crates.io package name is now `drift-tabular`. It was `drift-diff`, which
-  an unrelated crate claimed in August 2026, so `cargo install drift-diff`
-  installed a different tool and `cargo publish` could never have succeeded. The
-  binary, the repository and every command stay `drift`.
-
-### Added
-- Contribution, security, and changelog documentation, and status badges in the
-  README.
-- A CI job that builds and tests on the declared minimum supported Rust version.
-
-### Fixed
-- README, SECURITY, and CHANGELOG no longer point at a crates.io package and
-  release tags that do not exist.
-
-## 0.2.0
+The first published version. It goes to crates.io as `drift-tabular`, because
+`drift` was taken and so was the `drift-diff` this package used to declare: an
+unrelated crate claimed it in August 2026, which meant `cargo install
+drift-diff` fetched a different tool. The binary, the repository and every
+command a user types stay `drift`.
 
 ### Added
 - Composite keys (`--key region,id`) and ignored columns (`--ignore updated_at`).
@@ -39,6 +28,13 @@ describe the work rather than a downloadable artefact.
 - A duplicate key in the input is no longer silently hidden; it is warned about.
 - A leading byte-order mark is stripped rather than becoming part of the first
   column name.
+- README, SECURITY and CHANGELOG no longer point at a crates.io package and
+  release tags that did not exist.
+
+### Also in this release
+- Contribution, security and changelog documentation, and status badges in the
+  README.
+- A CI job that builds and tests on the declared minimum supported Rust version.
 
 ## 0.1.0
 
