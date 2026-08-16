@@ -1,5 +1,5 @@
 [package]
-name = "drift-diff"
+name = "drift-tabular"
 version = "0.2.0"
 edition = "2021"
 rust-version = "1.74"
@@ -11,8 +11,12 @@ readme = "README.md"
 keywords = ["csv", "diff", "data", "cli", "comparison"]
 categories = ["command-line-utilities", "parsing"]
 
-# `drift` is taken on crates.io, so the crate is drift-diff. The binary, the
-# repository and everything a user types stay `drift`.
+# The binary, the repository and everything a user types stay `drift`. Only the
+# registry name differs, because `drift` was taken on crates.io, and so was the
+# `drift-diff` this package used to claim: an unrelated git diff pager took it in
+# August 2026, which meant `cargo install drift-diff` fetched somebody else's
+# tool. `drift-tabular` was free when this was set, and it says what the thing
+# diffs, which the old name did not.
 [[bin]]
 name = "drift"
 path = "src/main.rs"

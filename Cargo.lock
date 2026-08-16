@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "drift-diff"
+name = "drift-tabular"
 version = "0.2.0"

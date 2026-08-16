@@ -1,16 +1,20 @@
 # drift
 
 [![CI](https://github.com/martin-k-m/drift/actions/workflows/ci.yml/badge.svg)](https://github.com/martin-k-m/drift/actions/workflows/ci.yml)
-[![crates.io](https://img.shields.io/crates/v/drift-diff.svg)](https://crates.io/crates/drift-diff)
-[![MSRV](https://img.shields.io/badge/rustc-1.74+-blue.svg)](https://blog.rust-lang.org/)
+[![MSRV](https://img.shields.io/badge/rustc-1.74+-blue.svg)](https://blog.rust-lang.org/2023/11/16/Rust-1.74.0.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Diff two tabular datasets. Schema changes, added and removed rows, and which
 fields moved. Zero dependencies.
 
+Not on crates.io yet. Install from the repository:
+
 ```bash
-cargo install drift-diff
+cargo install --git https://github.com/martin-k-m/drift
 ```
+
+The registry name will be `drift-tabular`, because `drift` was taken. The
+command stays `drift` either way; only the package name differs.
 
 ```bash
 drift before.csv after.csv --key id
@@ -169,6 +173,18 @@ Not covered, on purpose: comments and encoding detection. Those are the features
 that turn a parser into a library, and this is not trying to be one.
 
 Colour is disabled when `NO_COLOR` is set, and by `--no-color`.
+
+## Related
+
+Four small tools that each do one thing to a table of data:
+
+- [csvpeek](https://github.com/martin-k-m/csvpeek) profiles a file: column
+  types, null counts, distributions.
+- [sift](https://github.com/martin-k-m/sift) queries one: filter, sort,
+  aggregate, streaming.
+- **drift** diffs two of them. The only one of the four in Rust.
+- [quarry](https://github.com/martin-k-m/quarry) is the long way round, a
+  hand-written SQL parser and executor meant to be read.
 
 ## License
 

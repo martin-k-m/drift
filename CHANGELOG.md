@@ -4,13 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims
 to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+Neither version below has been tagged or released on GitHub yet, so the entries
+describe the work rather than a downloadable artefact.
+
+## Unreleased
+
+### Changed
+- The crates.io package name is now `drift-tabular`. It was `drift-diff`, which
+  an unrelated crate claimed in August 2026, so `cargo install drift-diff`
+  installed a different tool and `cargo publish` could never have succeeded. The
+  binary, the repository and every command stay `drift`.
 
 ### Added
 - Contribution, security, and changelog documentation, and status badges in the
   README.
+- A CI job that builds and tests on the declared minimum supported Rust version.
 
-## [0.2.0]
+### Fixed
+- README, SECURITY, and CHANGELOG no longer point at a crates.io package and
+  release tags that do not exist.
+
+## 0.2.0
 
 ### Added
 - Composite keys (`--key region,id`) and ignored columns (`--ignore updated_at`).
@@ -26,13 +40,9 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A leading byte-order mark is stripped rather than becoming part of the first
   column name.
 
-## [0.1.0]
+## 0.1.0
 
 ### Added
-- Initial release: keyed diff of two tabular files reporting schema changes,
+- Initial version: keyed diff of two tabular files reporting schema changes,
   added and removed rows, and per-field changes, with a hand-written
   RFC 4180 CSV reader and zero dependencies. MIT licensed.
-
-[Unreleased]: https://github.com/martin-k-m/drift/compare/main...HEAD
-[0.2.0]: https://github.com/martin-k-m/drift/releases/tag/v0.2.0
-[0.1.0]: https://github.com/martin-k-m/drift/releases/tag/v0.1.0

@@ -36,8 +36,12 @@ cargo clippy --all-targets -- -D warnings
 cargo test --all
 ```
 
-CI runs this matrix on Linux, macOS, and Windows — Windows especially, because
+CI runs this matrix on Linux, macOS, and Windows. Windows especially, because
 the `\r\n` handling in the CSV reader is code a Linux-only run never exercises.
+
+A separate job builds and tests on the minimum supported Rust version, 1.74,
+which is the `rust-version` in `Cargo.toml` and the number on the README badge.
+A change that needs a newer standard library method has to bump all three.
 
 ## Reporting bugs
 
