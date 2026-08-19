@@ -85,8 +85,16 @@ schema change, printed once. It is excluded from the field comparison, so it
 does not also appear as a change on every single row.
 
 **Silently pick a winner for duplicate keys.** With a repeated key there is no
-single "before" row to compare against, and choosing one quietly would make the
-diff depend on file order. Duplicates are reported as a warning.
+single "before" row to compare against, so drift warns about every key it saw
+more than once, on either side, and the warning survives even when nothing else
+moved.
+
+It still compares the key, against the last occurrence in the file. That means
+the answer depends on the order the rows appear in: the same two files, with two
+duplicate rows swapped, report a different "after" value. The warning is what
+makes that visible rather than silent, and it is the reason to fix the export
+rather than read the diff. If your data can repeat a key and you need an answer
+that does not move, key on enough columns to make rows unique.
 
 **Truncate without saying so.** Long lists stop at 20 entries and print how many
 more there are. A diff that hides rows silently reads as a complete answer and
