@@ -7,14 +7,12 @@
 Diff two tabular datasets. Schema changes, added and removed rows, and which
 fields moved. Zero dependencies.
 
-Not on crates.io yet. Install from the repository:
-
 ```bash
-cargo install --git https://github.com/martin-k-m/drift
+cargo install drift-tabular
 ```
 
-The registry name will be `drift-tabular`, because `drift` was taken. The
-command stays `drift` either way; only the package name differs.
+The registry name is `drift-tabular`, because `drift` was taken. The command
+stays `drift`; only the package name differs.
 
 ```bash
 drift before.csv after.csv --key id
