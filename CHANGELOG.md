@@ -7,6 +7,15 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 0.1.0 was never tagged or released; it describes the work rather than a
 downloadable artefact. 0.2.0 is the first release.
 
+## Unreleased
+
+### Fixed
+- A blank line in the middle of a file was read as a row with an empty key, so
+  it showed up in the diff as an added or removed row keyed by nothing. Blank
+  lines are now skipped wherever they fall, as trailing ones already were. A
+  line holding only `""` is still a row with one empty value.
+- "1 rows match" now reads "1 row matches".
+
 ## 0.2.0 - 2026-08-16
 
 The first published version. It goes to crates.io as `drift-tabular`, because

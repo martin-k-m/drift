@@ -67,6 +67,16 @@ fn identical_files_exit_zero() {
 }
 
 #[test]
+fn a_blank_line_mid_file_is_not_an_added_row() {
+    let s = Scratch::new();
+    let a = s.write("a.csv", "id,v\n1,x\n");
+    let b = s.write("b.csv", "id,v\n\n1,x\n");
+    let (code, out, _) = run(&[&a, &b, "--key", "id"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("no differences · 1 row matches"), "{out}");
+}
+
+#[test]
 fn a_difference_exits_one() {
     let s = Scratch::new();
     let a = s.write("a.csv", "id,v\n1,a\n");
