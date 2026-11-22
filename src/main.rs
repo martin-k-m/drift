@@ -302,7 +302,15 @@ fn print(r: &diff::Report, color: bool) {
         if r.duplicate_keys.is_empty() {
             println!(
                 "{}",
-                c.dim(&format!("no differences · {} rows match", r.unchanged))
+                c.dim(&format!(
+                    "no differences · {} {}",
+                    r.unchanged,
+                    if r.unchanged == 1 {
+                        "row matches"
+                    } else {
+                        "rows match"
+                    }
+                ))
             );
             return;
         }

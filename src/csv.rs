@@ -55,6 +55,10 @@ pub fn parse_with(input: &str, delim: char) -> Result<Table, String> {
     let mut field = String::new();
     let mut record: Vec<String> = Vec::new();
     let mut in_quotes = false;
+    // Whether the current record opened a quoted field. A line holding only
+    // `""` is a record with one empty value; a line holding nothing is not a
+    // record, and the two look the same once the quotes are gone.
+    let mut quoted = false;
     let mut chars = input.chars().peekable();
     let mut line = 1usize;
 
@@ -81,7 +85,10 @@ pub fn parse_with(input: &str, delim: char) -> Result<Table, String> {
         }
 
         match c {
-            '"' if field.is_empty() => in_quotes = true,
+            '"' if field.is_empty() => {
+                in_quotes = true;
+                quoted = true;
+            }
             c if c == delim => record.push(std::mem::take(&mut field)),
             '\r' => {
                 // Swallow the \n of a \r\n pair so it is one line break.
@@ -89,13 +96,11 @@ pub fn parse_with(input: &str, delim: char) -> Result<Table, String> {
                     chars.next();
                 }
                 line += 1;
-                record.push(std::mem::take(&mut field));
-                records.push(std::mem::take(&mut record));
+                end_record(&mut records, &mut record, &mut field, &mut quoted);
             }
             '\n' => {
                 line += 1;
-                record.push(std::mem::take(&mut field));
-                records.push(std::mem::take(&mut record));
+                end_record(&mut records, &mut record, &mut field, &mut quoted);
             }
             _ => field.push(c),
         }
@@ -106,15 +111,7 @@ pub fn parse_with(input: &str, delim: char) -> Result<Table, String> {
     }
 
     // A file not ending in a newline still has a final record.
-    if !field.is_empty() || !record.is_empty() {
-        record.push(field);
-        records.push(record);
-    }
-
-    // Trailing blank lines are noise, not empty rows.
-    while matches!(records.last(), Some(r) if r.len() == 1 && r[0].is_empty()) {
-        records.pop();
-    }
+    end_record(&mut records, &mut record, &mut field, &mut quoted);
 
     let mut it = records.into_iter();
     let header = it.next().ok_or_else(|| "file is empty".to_string())?;
@@ -122,6 +119,25 @@ pub fn parse_with(input: &str, delim: char) -> Result<Table, String> {
         header,
         rows: it.collect(),
     })
+}
+
+/// Close the record a line break ends, unless the line was empty.
+///
+/// A blank line is noise wherever it falls, not a row with an empty key: left
+/// in, one in the middle of a file showed up in the diff as an added or removed
+/// row keyed by nothing.
+fn end_record(
+    records: &mut Vec<Vec<String>>,
+    record: &mut Vec<String>,
+    field: &mut String,
+    quoted: &mut bool,
+) {
+    if record.is_empty() && field.is_empty() && !*quoted {
+        return;
+    }
+    record.push(std::mem::take(field));
+    records.push(std::mem::take(record));
+    *quoted = false;
 }
 
 #[cfg(test)]
@@ -215,6 +231,19 @@ mod tests {
     fn trailing_blank_lines_are_not_rows() {
         let t = parse("a\n1\n\n\n").unwrap();
         assert_eq!(t.rows, [["1"]]);
+    }
+
+    #[test]
+    fn blank_lines_inside_the_file_are_not_rows() {
+        let t = parse("\na,b\n1,2\n\n\r\n3,4\n").unwrap();
+        assert_eq!(t.header, ["a", "b"]);
+        assert_eq!(t.rows, [["1", "2"], ["3", "4"]]);
+    }
+
+    #[test]
+    fn a_quoted_empty_value_is_still_a_row() {
+        let t = parse("a\n\"\"\n1\n\"\"").unwrap();
+        assert_eq!(t.rows, [[""], ["1"], [""]]);
     }
 
     #[test]
